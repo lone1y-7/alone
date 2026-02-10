@@ -2,6 +2,7 @@ import sqlite3
 import requests
 import json
 import os
+import configparser
 from collections import defaultdict
 
 class SQLiteAnalyzer:
@@ -431,37 +432,83 @@ class SQLiteAnalyzer:
             else:
                 print("未知命令。输入 'help' 查看可用命令")
 
+def load_config(config_file='config.ini'):
+    """加载配置文件"""
+    if not os.path.exists(config_file):
+        return None
+
+    config = configparser.ConfigParser()
+    config.read(config_file)
+
+    return {
+        'provider': config.get('settings', 'provider', fallback='ollama'),
+        'doubao': {
+            'api_key': config.get('doubao', 'api_key', fallback=''),
+            'model': config.get('doubao', 'model', fallback='doubao-pro-32k'),
+            'endpoint': config.get('doubao', 'endpoint', fallback='https://ark.cn-beijing.volces.com/api/v3')
+        },
+        'ollama': {
+            'url': config.get('ollama', 'url', fallback='http://localhost:11434'),
+            'model': config.get('ollama', 'model', fallback='llama2')
+        }
+    }
+
 def main():
     import argparse
 
     parser = argparse.ArgumentParser(description='SQLite 数据库 AI 分析工具')
-    parser.add_argument('--provider', choices=['ollama', 'doubao'], default='ollama',
+    parser.add_argument('--provider', choices=['ollama', 'doubao'], default=None,
                        help='AI 提供商 (ollama 或 doubao)')
     parser.add_argument('--api-key', help='AI API 密钥')
     parser.add_argument('--model', help='AI 模型名称')
     parser.add_argument('--endpoint', help='API 端点地址')
-    parser.add_argument('--ollama-url', default='http://localhost:11434',
-                       help='Ollama 服务地址')
+    parser.add_argument('--ollama-url', help='Ollama 服务地址')
+    parser.add_argument('--config', default='config.ini', help='配置文件路径')
+    parser.add_argument('--db', default='example.db', help='SQLite 数据库文件路径')
 
     args = parser.parse_args()
 
-    if args.provider == 'ollama':
-        api_config = {'url': args.ollama_url}
-    elif args.provider == 'doubao':
-        if not args.api_key:
+    # 加载配置文件
+    config = load_config(args.config)
+
+    # 确定使用的提供商
+    provider = args.provider or (config['provider'] if config else 'ollama')
+
+    # 构建 API 配置
+    api_config = {}
+
+    if provider == 'ollama':
+        api_config = {
+            'url': args.ollama_url or (config['ollama']['url'] if config else 'http://localhost:11434')
+        }
+    elif provider == 'doubao':
+        api_key = args.api_key or (config['doubao']['api_key'] if config else None) or os.getenv('DOUBAO_API_KEY')
+
+        if not api_key:
             print("错误: 使用豆包 AI 需要提供 API 密钥")
-            print("请使用 --api-key 参数或设置环境变量 DOUBAO_API_KEY")
-            print("\n示例:")
-            print("  python3 sqlite_analyzer.py --provider doubao --api-key your-api-key")
+            print("\n请选择以下方式之一配置 API 密钥：\n")
+            print("方式 1: 命令行参数")
+            print("  python3 sqlite_analyzer.py --provider doubao --api-key your_api_key\n")
+            print("方式 2: 环境变量")
+            print("  export DOUBAO_API_KEY=your_api_key")
+            print("  python3 sqlite_analyzer.py --provider doubao\n")
+            print("方式 3: 配置文件")
+            print("  cp config.ini.example config.ini")
+            print("  编辑 config.ini，填写你的 API 密钥")
+            print("  python3 sqlite_analyzer.py --provider doubao --config config.ini\n")
             return
 
         api_config = {
-            'api_key': args.api_key or os.getenv('DOUBAO_API_KEY'),
-            'model': args.model or 'doubao-pro-32k',
-            'endpoint': args.endpoint or 'https://ark.cn-beijing.volces.com/api/v3'
+            'api_key': api_key,
+            'model': args.model or (config['doubao']['model'] if config else 'doubao-pro-32k'),
+            'endpoint': args.endpoint or (config['doubao']['endpoint'] if config else 'https://ark.cn-beijing.volces.com/api/v3')
         }
 
-    analyzer = SQLiteAnalyzer('example.db', args.provider, api_config)
+    print(f"使用 AI 提供商: {provider}")
+    if provider == 'doubao':
+        print(f"  模型: {api_config['model']}")
+
+    analyzer = SQLiteAnalyzer(args.db, provider, api_config)
     analyzer.connect()
 
     try:

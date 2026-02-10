@@ -1,6 +1,26 @@
 # SQLite 数据库 AI 分析工具
 
-使用本地部署的 Ollama + llama2 模型分析 SQLite 数据库。
+使用本地部署的 Ollama + llama2 模型分析 SQLite 数据库，支持智能关联发现和数据取证分析。
+
+## 功能特性
+
+### 核心功能
+- **AI 智能分析**：使用本地 Ollama + llama2 模型进行数据分析
+- **交互式查询**：自然语言提问数据库相关问题
+- **SQL 查询执行**：直接执行 SQL 语句并查看结果
+- **数据关联发现**：自动检测表之间的显式和隐式关联
+- **JOIN 查询建议**：根据关联关系自动生成 SQL JOIN 语句
+
+### 数据关联分析
+- **外键关系检测**：自动识别数据库定义的外键约束
+- **隐式关联发现**：基于字段名称和数据内容发现隐式关联
+- **数据重叠率计算**：计算字段间的数据交集比例
+- **置信度评估**：高/中两个等级评估关联可靠性
+
+### 智能回答模式
+- **纯中文回答**：所有解释和分析使用中文
+- **保留英文术语**：SQL 关键词、表名、字段名、技术术语保持英文
+- **专业分析**：提供数据洞察和改进建议
 
 ## 安装
 
@@ -60,18 +80,22 @@ python3 test.py
 | `tables` | 查看所有表 |
 | `schema <表名>` | 查看表结构 |
 | `query <SQL语句>` | 执行 SQL 查询 |
+| `relationships` | 分析表之间的关联关系 |
+| `suggest-join <表1> [表2]` | 生成 JOIN 查询建议 |
 | `quit` | 退出程序 |
 
-## 示例
+## 使用示例
 
-### 查看表列表
+### 基础查询
+
+#### 查看表列表
 
 ```
 > tables
 数据库中的表: customers, sqlite_sequence, products, orders
 ```
 
-### 查看表结构
+#### 查看表结构
 
 ```
 > schema customers
@@ -84,25 +108,108 @@ python3 test.py
   created_at: TIMESTAMP
 ```
 
-### 执行查询
+#### 执行查询
 
 ```
 > query SELECT * FROM orders LIMIT 3
 查询结果:
-  {'id': 1, 'customer_id': 2, 'project_id': 3, 'quantity': 2, 'total_price': 798.0, 'order_date': '2026-01-15 10:30:00', 'status': 'completed'}
-  {'id': 2, 'customer_id': 1, 'project_id': 1, 'quantity': 1, 'total_price': 5999.0, 'order_date': '2026-01-18 14:20:00', 'status': 'completed'}
-  {'id': 3, 'customer_id': 4, 'project_id': 7, 'quantity': 1, 'total_price': 1599.0, 'order_date': '2026-01-20 09:15:00', 'status': 'completed'}
+  {'id': 1, 'customer_id': 2, 'product_id': 3, 'quantity': 2, 'total_price': 798.0, 'order_date': '2026-01-15 10:30:00', 'status': 'completed'}
+  {'id': 2, 'customer_id': 1, 'product_id': 1, 'quantity': 1, 'total_price': 5999.0, 'order_date': '2026-01-18 14:20:00', 'status': 'completed'}
+  {'id': 3, 'customer_id': 4, 'product_id': 7, 'quantity': 1, 'total_price': 1599.0, 'order_date': '2026-01-20 09:15:00', 'status': 'completed'}
 ```
 
 ### AI 分析
+
+#### 提问分析
 
 ```
 > ask 哪个城市的客户订单最多？
 ```
 
+#### 整体分析
+
 ```
 > analyze
 ```
+
+AI 会提供：
+1. 数据库整体概况
+2. 各表的数据特点
+3. 可能的业务场景分析
+4. 数据质量评估
+5. 改进建议
+
+### 数据关联分析
+
+#### 查看所有表关联
+
+```
+> relationships
+```
+
+**输出示例：**
+
+```
+============================================================
+数据库表关系分析 / Database Table Relationships Analysis
+============================================================
+
+📊 关系摘要 / Relationship Summary:
+  - 显式外键关系 / Explicit Foreign Keys: 2
+  - 隐式数据关联 / Implicit Data Relationships: 3
+
+🔗 显式外键关系 / Explicit Foreign Keys:
+
+  orders.product_id -> products.id
+    ON UPDATE: NO ACTION, ON DELETE: NO ACTION
+
+  orders.customer_id -> customers.id
+    ON UPDATE: NO ACTION, ON DELETE: NO ACTION
+
+🔍 隐式数据关联 / Implicit Data Relationships:
+
+  customers.id <-> products.id
+    数据重叠率 / Overlap Ratio: 100.00%
+    置信度 / Confidence: high
+
+  products.id <-> orders.id
+    数据重叠率 / Overlap Ratio: 100.00%
+    置信度 / Confidence: high
+
+============================================================
+```
+
+#### 生成 JOIN 查询建议
+
+**示例 1：查询两个表之间的关联**
+
+```
+> suggest-join customers orders
+```
+
+**输出：**
+
+```
+找到 2 个关联建议:
+
+1. 关联 / Relationship: customers.id <-> orders.customer_id
+   置信度 / Confidence: high
+   查询 / Query:
+   SELECT * FROM customers JOIN orders ON customers.id = orders.customer_id
+
+2. 关联 / Relationship: orders.id <-> customers.id
+   置信度 / Confidence: high
+   查询 / Query:
+   SELECT * FROM orders JOIN customers ON orders.id = customers.id
+```
+
+**示例 2：查询某个表的所有关联**
+
+```
+> suggest-join orders
+```
+
+查看 orders 表的所有可能关联关系。
 
 ## 示例数据库
 
@@ -124,6 +231,30 @@ analyzer = SQLiteAnalyzer('你的数据库.db', 'http://localhost:11434')
 ```
 
 3. 运行程序
+
+## 数据关联发现功能详解
+
+详细的关联分析功能使用说明，请参考：`RELATIONSHIPS_GUIDE.md`
+
+### 检测原理
+
+1. **外键关系**：通过 `PRAGMA foreign_key_list` 命令读取数据库定义的外键约束
+
+2. **隐式关联发现**：基于以下两种线索
+   - 字段名称相似性：识别常见命名模式
+   - 数据内容重叠率：计算字段间的数据交集比例
+
+### 置信度等级
+
+- **高**：数据重叠率 ≥ 90%
+- **中**：数据重叠率 ≥ 70%
+
+### 应用场景
+
+- 数据库文档化
+- 复杂查询构建
+- 数据质量检查
+- 迁移和重构
 
 ## 故障排查
 
@@ -172,3 +303,20 @@ tail -f /tmp/ollama.log
 - `test.py` - 测试程序
 - `start_services.sh` - 启动服务脚本
 - `README.md` - 本文档
+- `RELATIONSHIPS_GUIDE.md` - 数据关联分析使用指南
+
+## 开发计划
+
+未来计划添加的功能：
+
+- [ ] 数据完整性检查
+- [ ] 异常模式检测
+- [ ] 时间线分析
+- [ ] 敏感数据扫描
+- [ ] 取证报告生成
+- [ ] 数据可视化
+- [ ] ER 图生成
+
+## 贡献
+
+欢迎提交 Issue 和 Pull Request！

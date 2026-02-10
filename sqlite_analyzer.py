@@ -2,6 +2,7 @@ import sqlite3
 import requests
 import json
 import os
+import sys
 import configparser
 from collections import defaultdict
 
@@ -440,7 +441,15 @@ def load_config(config_file='config.ini'):
         return None
 
     config = configparser.ConfigParser()
-    config.read(config_file)
+    
+    # 使用 UTF-8 编码读取配置文件，避免 Windows GBK 编码问题
+    try:
+        with open(config_file, 'r', encoding='utf-8') as f:
+            config.read_file(f)
+    except UnicodeDecodeError:
+        # 如果 UTF-8 失败，尝试使用系统默认编码
+        with open(config_file, 'r', encoding=sys.getdefaultencoding()) as f:
+            config.read_file(f)
 
     return {
         'provider': config.get('settings', 'provider', fallback='ollama'),

@@ -451,11 +451,11 @@ def load_config(config_file='config.ini'):
         with open(config_file, 'r', encoding=sys.getdefaultencoding()) as f:
             config.read_file(f)
 
-    return {
+        return {
         'provider': config.get('settings', 'provider', fallback='ollama'),
         'doubao': {
             'api_key': config.get('doubao', 'api_key', fallback=''),
-            'model': config.get('doubao', 'model', fallback='doubao-pro-32k'),
+            'model': config.get('doubao', 'model', fallback='doubao-seed-251228'),
             'endpoint': config.get('doubao', 'endpoint', fallback='https://ark.cn-beijing.volces.com/api/v3')
         },
         'ollama': {
@@ -471,7 +471,7 @@ def main():
     parser.add_argument('--provider', choices=['ollama', 'doubao'], default=None,
                        help='AI 提供商 (ollama 或 doubao)')
     parser.add_argument('--api-key', help='AI API 密钥')
-    parser.add_argument('--model', help='AI 模型名称')
+    parser.add_argument('--model', help='AI 模型名称（豆包默认：doubao-seed-251228）')
     parser.add_argument('--endpoint', help='API 端点地址')
     parser.add_argument('--ollama-url', help='Ollama 服务地址')
     parser.add_argument('--config', default='config.ini', help='配置文件路径')
@@ -510,8 +510,8 @@ def main():
             return
 
         api_config = {
-            'api_key': api_key,
-            'model': args.model or (config['doubao']['model'] if config else 'doubao-pro-32k'),
+            'api_key': args.api_key or (config['doubao']['api_key'] if config else None) or os.getenv('DOUBAO_API_KEY'),
+            'model': args.model or (config['doubao']['model'] if config else 'ep-20241225194800-r0q4p4i'),
             'endpoint': args.endpoint or (config['doubao']['endpoint'] if config else 'https://ark.cn-beijing.volces.com/api/v3')
         }
 

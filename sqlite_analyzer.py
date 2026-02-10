@@ -1,13 +1,22 @@
 import sqlite3
 import requests
 import json
+import os
 from collections import defaultdict
 
 class SQLiteAnalyzer:
-    def __init__(self, db_path, ollama_url='http://localhost:11434'):
+    def __init__(self, db_path, ai_provider='ollama', api_config=None):
         self.db_path = db_path
-        self.ollama_url = ollama_url
+        self.ai_provider = ai_provider
+        self.api_config = api_config or {}
         self.conn = None
+
+        if ai_provider == 'ollama':
+            self.ollama_url = api_config.get('url', 'http://localhost:11434') if api_config else 'http://localhost:11434'
+        elif ai_provider == 'doubao':
+            self.doubao_api_key = api_config.get('api_key') if api_config else ''
+            self.doubao_model = api_config.get('model') if api_config else 'doubao-pro-32k'
+            self.doubao_endpoint = api_config.get('endpoint') if api_config else 'https://ark.cn-beijing.volces.com/api/v3'
 
     def connect(self):
         self.conn = sqlite3.connect(self.db_path)
@@ -64,21 +73,15 @@ class SQLiteAnalyzer:
     def analyze_with_ai(self, question=None):
         description = self.generate_database_description()
 
-        system_prompt = """You are a database analysis assistant. Please follow these rules:
+        system_prompt = """你是一个数据库分析助手。请按照以下规则进行分析：
 
-1. Answer entirely in Chinese (中文回答)
-2. Keep technical terms that are hard to translate in English, such as:
-   - SQL keywords: SELECT, WHERE, FROM, JOIN, etc.
-   - Database terms: PRIMARY KEY, FOREIGN KEY, etc.
-   - Table names and column names
-   - Specific technology names: Ollama, llama2, etc.
-3. Code examples and SQL queries should remain in English
-4. Provide clear, detailed analysis in Chinese
-
-请用中文回答，只保留不易翻译的英文术语。"""
+1. 使用中文回答
+2. 保留不易翻译的英文术语
+3. 提供详细的数据分析和见解
+4. 给出可操作的建议"""
 
         if question:
-            prompt = f"""基于以下数据库信息，回答用户的问题：
+            user_message = f"""基于以下数据库信息，回答用户的问题：
 
 {description}
 
@@ -86,7 +89,7 @@ class SQLiteAnalyzer:
 
 请用中文详细回答，提供相关的数据分析和见解。"""
         else:
-            prompt = f"""请分析以下数据库，提供详细的数据分析和业务见解：
+            user_message = f"""请分析以下数据库，提供详细的数据分析和业务见解：
 
 {description}
 
@@ -99,11 +102,22 @@ class SQLiteAnalyzer:
 
 请用中文详细回答。"""
 
+        if self.ai_provider == 'ollama':
+            response = self._call_ollama(system_prompt, user_message)
+        elif self.ai_provider == 'doubao':
+            response = self._call_doubao(system_prompt, user_message)
+        else:
+            response = "不支持的 AI 提供商"
+
+        return response
+
+    def _call_ollama(self, system_prompt, user_message):
+        """调用 Ollama API"""
         response = requests.post(
             f'{self.ollama_url}/api/generate',
             json={
                 'model': 'llama2',
-                'prompt': prompt,
+                'prompt': user_message,
                 'stream': False,
                 'system': system_prompt
             },
@@ -114,7 +128,39 @@ class SQLiteAnalyzer:
             result = response.json()
             return result.get('response', '分析失败')
         else:
-            return f"调用 AI 失败: {response.status_code} - {response.text}"
+            return f"调用 Ollama 失败: {response.status_code} - {response.text}"
+
+    def _call_doubao(self, system_prompt, user_message):
+        """调用豆包 AI API"""
+        headers = {
+            'Authorization': f'Bearer {self.doubao_api_key}',
+            'Content-Type': 'application/json'
+        }
+
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_message}
+        ]
+
+        data = {
+            'model': self.doubao_model,
+            'messages': messages,
+            'temperature': 0.7,
+            'max_tokens': 4096
+        }
+
+        response = requests.post(
+            f'{self.doubao_endpoint}/chat/completions',
+            headers=headers,
+            json=data,
+            timeout=300
+        )
+
+        if response.status_code == 200:
+            result = response.json()
+            return result['choices'][0]['message']['content']
+        else:
+            return f"调用豆包 AI 失败: {response.status_code} - {response.text}"
 
     def execute_query(self, query):
         try:
@@ -297,7 +343,11 @@ class SQLiteAnalyzer:
     def interactive_mode(self):
         print("=== SQLite 数据库 AI 分析工具 ===")
         print(f"数据库: {self.db_path}")
-        print(f"Ollama: {self.ollama_url}")
+        if self.ai_provider == 'ollama':
+            print(f"AI 提供商: Ollama (llama2)")
+            print(f"Ollama 地址: {self.ollama_url}")
+        elif self.ai_provider == 'doubao':
+            print(f"AI 提供商: 豆包 AI ({self.doubao_model})")
         print("\n命令:")
         print("  analyze - 使用 AI 分析整个数据库")
         print("  ask <问题> - 向 AI 提问关于数据库的问题")
@@ -382,7 +432,36 @@ class SQLiteAnalyzer:
                 print("未知命令。输入 'help' 查看可用命令")
 
 def main():
-    analyzer = SQLiteAnalyzer('example.db', 'http://localhost:11434')
+    import argparse
+
+    parser = argparse.ArgumentParser(description='SQLite 数据库 AI 分析工具')
+    parser.add_argument('--provider', choices=['ollama', 'doubao'], default='ollama',
+                       help='AI 提供商 (ollama 或 doubao)')
+    parser.add_argument('--api-key', help='AI API 密钥')
+    parser.add_argument('--model', help='AI 模型名称')
+    parser.add_argument('--endpoint', help='API 端点地址')
+    parser.add_argument('--ollama-url', default='http://localhost:11434',
+                       help='Ollama 服务地址')
+
+    args = parser.parse_args()
+
+    if args.provider == 'ollama':
+        api_config = {'url': args.ollama_url}
+    elif args.provider == 'doubao':
+        if not args.api_key:
+            print("错误: 使用豆包 AI 需要提供 API 密钥")
+            print("请使用 --api-key 参数或设置环境变量 DOUBAO_API_KEY")
+            print("\n示例:")
+            print("  python3 sqlite_analyzer.py --provider doubao --api-key your-api-key")
+            return
+
+        api_config = {
+            'api_key': args.api_key or os.getenv('DOUBAO_API_KEY'),
+            'model': args.model or 'doubao-pro-32k',
+            'endpoint': args.endpoint or 'https://ark.cn-beijing.volces.com/api/v3'
+        }
+
+    analyzer = SQLiteAnalyzer('example.db', args.provider, api_config)
     analyzer.connect()
 
     try:

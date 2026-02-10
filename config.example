@@ -1,0 +1,11 @@
+# 豆包 AI API 密钥配置示例
+# 将此文件重命名为 config.ini 并填写你的 API 密钥
+
+[doubao]
+api_key = your_doubao_api_key_here
+model = doubao-pro-32k
+endpoint = https://ark.cn-beijing.volces.com/api/v3
+
+[ollama]
+url = http://localhost:11434
+model = llama2

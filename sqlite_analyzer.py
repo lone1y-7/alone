@@ -63,42 +63,40 @@ class SQLiteAnalyzer:
     def analyze_with_ai(self, question=None):
         description = self.generate_database_description()
 
-        system_prompt = """You are a bilingual AI assistant (Chinese/English). When responding to user questions:
+        system_prompt = """You are a database analysis assistant. Please follow these rules:
 
-1. Use Chinese as the primary language for main explanations and analysis
-2. Use English for technical terms, SQL code, table/column names, and data examples
-3. Keep the response structured and professional
-4. Provide clear, actionable insights
-5. Use a natural mix: 70% Chinese + 30% English
+1. Answer entirely in Chinese (中文回答)
+2. Keep technical terms that are hard to translate in English, such as:
+   - SQL keywords: SELECT, WHERE, FROM, JOIN, etc.
+   - Database terms: PRIMARY KEY, FOREIGN KEY, etc.
+   - Table names and column names
+   - Specific technology names: Ollama, llama2, etc.
+3. Code examples and SQL queries should remain in English
+4. Provide clear, detailed analysis in Chinese
 
-Example format:
-中文解释要点，technical term in English. Code snippet:
-SELECT * FROM table_name
-More Chinese explanation...
-
-Please answer in this bilingual style."""
+请用中文回答，只保留不易翻译的英文术语。"""
 
         if question:
-            prompt = f"""Analyze the database and answer the user's question:
+            prompt = f"""基于以下数据库信息，回答用户的问题：
 
 {description}
 
-User Question: {question}
+用户问题: {question}
 
-Please provide detailed bilingual analysis (Chinese + English) with insights and recommendations."""
+请用中文详细回答，提供相关的数据分析和见解。"""
         else:
-            prompt = f"""Analyze the database and provide detailed insights:
+            prompt = f"""请分析以下数据库，提供详细的数据分析和业务见解：
 
 {description}
 
-Please provide:
-1. Overall database overview (数据库整体概况)
-2. Data characteristics of each table (各表的数据特点)
-3. Potential business scenarios (可能的业务场景分析)
-4. Data quality assessment (数据质量评估)
-5. Improvement recommendations (改进建议)
+请提供：
+1. 数据库整体概况
+2. 各表的数据特点
+3. 可能的业务场景分析
+4. 数据质量评估
+5. 改进建议
 
-Please answer in bilingual style (Chinese + English)."""
+请用中文详细回答。"""
 
         response = requests.post(
             f'{self.ollama_url}/api/generate',
@@ -113,9 +111,9 @@ Please answer in bilingual style (Chinese + English)."""
 
         if response.status_code == 200:
             result = response.json()
-            return result.get('response', '分析失败 / Analysis failed')
+            return result.get('response', '分析失败')
         else:
-            return f"调用 AI 失败 / AI call failed: {response.status_code} - {response.text}"
+            return f"调用 AI 失败: {response.status_code} - {response.text}"
 
     def execute_query(self, query):
         try:
@@ -170,14 +168,14 @@ Please answer in bilingual style (Chinese + English)."""
                         print(f"  {row}")
 
             elif user_input.lower() == 'analyze':
-                print("\n正在分析数据库 / Analyzing database，请稍候 / please wait...")
+                print("\n正在分析数据库，请稍候...")
                 result = self.analyze_with_ai()
                 print(f"\n{result}")
 
             elif user_input.lower().startswith('ask '):
                 question = user_input[4:].strip()
-                print(f"\n正在回答问题 / Answering question: {question}")
-                print("请稍候 / Please wait...")
+                print(f"\n正在回答问题: {question}")
+                print("请稍候...")
                 result = self.analyze_with_ai(question)
                 print(f"\n{result}")
 

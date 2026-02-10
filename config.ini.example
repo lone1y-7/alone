@@ -7,7 +7,7 @@ provider = doubao
 
 [doubao]
 # 豆包 AI API 密钥
-api_key = 在这里填写你的豆包_api_key
+api_key = 91ac605a-d9a5-4c77-b710-204a1632b459
 
 # 模型选择:
 # - doubao-pro-32k (推荐，32K 上下文)

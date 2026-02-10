@@ -348,7 +348,7 @@ class SQLiteAnalyzer:
             print(f"AI 提供商: Ollama (llama2)")
             print(f"Ollama 地址: {self.ollama_url}")
         elif self.ai_provider == 'doubao':
-            print(f"AI 提供商: 豆包 AI ({self.doubao_model})")
+            print(f"AI 提供商: 豆包 AI ({self.doubao_model if hasattr(self, 'doubao_model') else 'unknown'})")
         print("\n命令:")
         print("  analyze - 使用 AI 分析整个数据库")
         print("  ask <问题> - 向 AI 提问关于数据库的问题")
@@ -403,6 +403,8 @@ class SQLiteAnalyzer:
 
             elif user_input.lower() == 'relationships':
                 print("\n正在分析表关联关系，请稍候...")
+                if self.ai_provider == 'doubao':
+                    print("注意：表关联分析功能使用本地数据库操作，不调用 AI API")
                 analysis = self.analyze_relationships()
                 formatted = self.format_relationship_analysis(analysis)
                 print(f"\n{formatted}")

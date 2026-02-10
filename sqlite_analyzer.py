@@ -17,7 +17,7 @@ class SQLiteAnalyzer:
             self.ollama_url = api_config.get('url', 'http://localhost:11434') if api_config else 'http://localhost:11434'
         elif ai_provider == 'doubao':
             self.doubao_api_key = api_config.get('api_key') if api_config else ''
-            self.doubao_model = api_config.get('model') if api_config else 'doubao-pro-32k'
+            self.doubao_model = api_config.get('model') if api_config else 'doubao-seed-1.8-251228'
             self.doubao_endpoint = api_config.get('endpoint') if api_config else 'https://ark.cn-beijing.volces.com/api/v3'
 
     def connect(self):
@@ -483,49 +483,60 @@ def main():
     config = load_config(args.config)
 
     # 确定使用的提供商
-    provider = args.provider or (config['provider'] if config else 'ollama')
+    provider = args.provider or 'ollama'
+
+    # 构建豆包配置
+    doubao_api_key = None
+    doubao_model = 'doubao-seed-1.8-251228'
+    doubao_endpoint = 'https://ark.cn-beijing.volces.com/api/v3'
+
+    # 从配置文件读取（如果指定）
+    if args.config and os.path.exists(args.config):
+        file_config = configparser.ConfigParser()
+        try:
+            with open(args.config, 'r', encoding='utf-8') as f:
+                file_config.read_file(f)
+
+            if file_config.has_option('doubao', 'api_key'):
+                doubao_api_key = file_config['doubao']['api_key']
+            if file_config.has_option('doubao', 'model'):
+                doubao_model = file_config['doubao']['model']
+            if file_config.has_option('doubao', 'endpoint'):
+                doubao_endpoint = file_config['doubao']['endpoint']
+        except Exception as e:
+            print(f"读取配置文件失败: {e}")
+
+    # 命令行参数覆盖
+    api_key = args.api_key or doubao_api_key or os.getenv('DOUBAO_API_KEY')
+    model = args.model or doubao_model
+    endpoint = args.endpoint or doubao_endpoint
+
+    if provider == 'doubao' and (not api_key or not api_key.strip()):
+        print("错误: 使用豆包 AI 需要提供 API 密钥")
+        print("\n请选择以下方式之一配置 API 密钥：\n")
+        print("方式 1: 命令行参数")
+        print("  python3 sqlite_analyzer.py --provider doubao --api-key your_api_key")
+        print("\n方式 2: 环境变量")
+        print("  export DOUBAO_API_KEY=your_api_key")
+        print("  python3 sqlite_analyzer.py --provider doubao\n")
+        print("方式 3: 配置文件")
+        print("  编辑 config.ini.example 桫写你的 API 密钥")
+        print("  python3 sqlite_analyzer.py --provider doubao --config config.ini\n")
+        return
 
     # 构建 API 配置
-    api_config = {}
+    api_config = {
+        'api_key': api_key,
+        'model': model,
+        'endpoint': endpoint
+    }
 
     if provider == 'ollama':
-        api_config = {
-            'url': args.ollama_url or (config['ollama']['url'] if config else 'http://localhost:11434')
-        }
-    elif provider == 'doubao':
-        api_key = args.api_key or (config['doubao']['api_key'] if config else None) or os.getenv('DOUBAO_API_KEY')
-
-        if not api_key:
-            print("错误: 使用豆包 AI 需要提供 API 密钥")
-            print("\n请选择以下方式之一配置 API 密钥：\n")
-            print("方式 1: 命令行参数")
-            print("  python3 sqlite_analyzer.py --provider doubao --api-key your_api_key\n")
-            print("方式 2: 环境变量")
-            print("  export DOUBAO_API_KEY=your_api_key")
-            print("  python3 sqlite_analyzer.py --provider doubao\n")
-            print("方式 3: 配置文件")
-            print("  cp config.ini.example config.ini")
-            print("  编辑 config.ini，填写你的 API 密钥")
-            print("  python3 sqlite_analyzer.py --provider doubao --config config.ini\n")
-            return
-
-        api_config = {
-            'api_key': args.api_key or (config['doubao']['api_key'] if config else None) or os.getenv('DOUBAO_API_KEY'),
-            'model': args.model or (config['doubao']['model'] if config else 'ep-20241225194800-r0q4p4i'),
-            'endpoint': args.endpoint or (config['doubao']['endpoint'] if config else 'https://ark.cn-beijing.volces.com/api/v3')
-        }
+        ollama_url = args.ollama_url or 'http://localhost:11434'
+        api_config = {'url': ollama_url}
 
     print(f"使用 AI 提供商: {provider}")
     if provider == 'doubao':
-        print(f"  模型: {api_config['model']}")
-
-    analyzer = SQLiteAnalyzer(args.db, provider, api_config)
-    analyzer.connect()
-
-    try:
-        analyzer.interactive_mode()
-    finally:
-        analyzer.disconnect()
-
-if __name__ == '__main__':
-    main()
+        print(f"  模型: {model}")
+    elif provider == 'ollama':
+        print(f"  模型: llama2")

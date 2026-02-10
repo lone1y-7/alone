@@ -6,14 +6,11 @@
 provider = doubao
 
 [doubao]
-# 豆包 AI API 密钥
 api_key = 91ac605a-d9a5-4c77-b710-204a1632b459
 
-# 模型选择:
-# - doubao-pro-32k (推荐，32K 上下文)
-# - doubao-pro-4k (快速，4K 上下文)
-# - doubao-lite-4k (低成本，4K 上下文)
-model = doubao-pro-32k
+# 模型名称（根据你开通的实际模型填写）
+# 你的模型: doubao-seed-1.8-251228
+model = doubao-seed-1.8-251228
 
 # API 端点地址 (一般不需要修改)
 endpoint = https://ark.cn-beijing.volces.com/api/v3

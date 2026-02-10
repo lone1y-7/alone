@@ -1,6 +1,7 @@
 import sqlite3
 import requests
 import json
+from collections import defaultdict
 
 class SQLiteAnalyzer:
     def __init__(self, db_path, ollama_url='http://localhost:11434'):
@@ -125,6 +126,174 @@ class SQLiteAnalyzer:
         except Exception as e:
             return {'error': str(e)}
 
+    def discover_foreign_keys(self):
+        """发现数据库中的外键关系"""
+        cursor = self.conn.cursor()
+        tables = self.get_tables()
+        foreign_keys = defaultdict(list)
+
+        for table in tables:
+            cursor.execute(f"PRAGMA foreign_key_list({table})")
+            fk_list = cursor.fetchall()
+
+            for fk in fk_list:
+                id, seq, table_name, from_col, to_col, on_update, on_delete, match = fk
+                foreign_keys[table].append({
+                    'from_column': from_col,
+                    'referenced_table': table_name,
+                    'referenced_column': to_col,
+                    'on_update': on_update,
+                    'on_delete': on_delete
+                })
+
+        return dict(foreign_keys)
+
+    def discover_data_relationships(self, similarity_threshold=0.7):
+        """基于数据内容发现隐式关联"""
+        cursor = self.conn.cursor()
+        tables = self.get_tables()
+        relationships = []
+
+        for i, table1 in enumerate(tables):
+            if table1.startswith('sqlite_'):
+                continue
+
+            schema1 = self.get_table_schema(table1)
+            cols1 = [col[1] for col in schema1 if col[2] in ['INTEGER', 'TEXT']]
+
+            for j, table2 in enumerate(tables):
+                if i >= j or table2.startswith('sqlite_'):
+                    continue
+
+                schema2 = self.get_table_schema(table2)
+                cols2 = [col[1] for col in schema2 if col[2] in ['INTEGER', 'TEXT']]
+
+                for col1 in cols1:
+                    for col2 in cols2:
+                        if self._column_names_similar(col1, col2):
+                            overlap_ratio = self._calculate_data_overlap(cursor, table1, col1, table2, col2)
+
+                            if overlap_ratio >= similarity_threshold:
+                                relationships.append({
+                                    'type': 'data_overlap',
+                                    'table1': table1,
+                                    'column1': col1,
+                                    'table2': table2,
+                                    'column2': col2,
+                                    'overlap_ratio': overlap_ratio,
+                                    'confidence': 'high' if overlap_ratio > 0.9 else 'medium'
+                                })
+
+        return relationships
+
+    def _column_names_similar(self, col1, col2):
+        """判断列名是否相似"""
+        col1_lower = col1.lower()
+        col2_lower = col2.lower()
+
+        if col1_lower == col2_lower:
+            return True
+
+        col_variations = {
+            'id': ['id', '_id', 'pk', 'primary_key'],
+            'name': ['name', 'title', 'label', 'display_name'],
+            'user': ['user', 'user_id', 'uid', 'owner', 'owner_id'],
+            'customer': ['customer', 'customer_id', 'cust_id'],
+            'product': ['product', 'product_id', 'item_id'],
+            'order': ['order', 'order_id', 'order_number'],
+            'date': ['date', 'time', 'datetime', 'created_at', 'updated_at']
+        }
+
+        for key, variations in col_variations.items():
+            if col1_lower in variations and col2_lower in variations:
+                return True
+
+        return False
+
+    def _calculate_data_overlap(self, cursor, table1, col1, table2, col2, sample_size=100):
+        """计算两个列的数据重叠率"""
+        try:
+            cursor.execute(f"SELECT DISTINCT {col1} FROM {table1} LIMIT {sample_size}")
+            values1 = set([str(row[0]) for row in cursor.fetchall() if row[0] is not None])
+
+            cursor.execute(f"SELECT DISTINCT {col2} FROM {table2} LIMIT {sample_size}")
+            values2 = set([str(row[0]) for row in cursor.fetchall() if row[0] is not None])
+
+            if not values1 or not values2:
+                return 0
+
+            intersection = len(values1 & values2)
+            smaller_set = min(len(values1), len(values2))
+
+            return intersection / smaller_set if smaller_set > 0 else 0
+
+        except Exception:
+            return 0
+
+    def analyze_relationships(self):
+        """综合分析表关系"""
+        foreign_keys = self.discover_foreign_keys()
+        data_relationships = self.discover_data_relationships()
+
+        analysis = {
+            'explicit_relationships': foreign_keys,
+            'implicit_relationships': data_relationships,
+            'summary': {
+                'total_explicit': sum(len(rels) for rels in foreign_keys.values()),
+                'total_implicit': len(data_relationships)
+            }
+        }
+
+        return analysis
+
+    def format_relationship_analysis(self, analysis):
+        """格式化关系分析结果"""
+        output = []
+        output.append("=" * 60)
+        output.append("数据库表关系分析 / Database Table Relationships Analysis")
+        output.append("=" * 60)
+
+        output.append(f"\n📊 关系摘要 / Relationship Summary:")
+        output.append(f"  - 显式外键关系 / Explicit Foreign Keys: {analysis['summary']['total_explicit']}")
+        output.append(f"  - 隐式数据关联 / Implicit Data Relationships: {analysis['summary']['total_implicit']}")
+
+        if analysis['explicit_relationships']:
+            output.append(f"\n🔗 显式外键关系 / Explicit Foreign Keys:")
+            for table, fks in analysis['explicit_relationships'].items():
+                for fk in fks:
+                    output.append(f"\n  {table}.{fk['from_column']} -> {fk['referenced_table']}.{fk['referenced_column']}")
+                    output.append(f"    ON UPDATE: {fk['on_update']}, ON DELETE: {fk['on_delete']}")
+
+        if analysis['implicit_relationships']:
+            output.append(f"\n🔍 隐式数据关联 / Implicit Data Relationships:")
+            for rel in analysis['implicit_relationships']:
+                output.append(f"\n  {rel['table1']}.{rel['column1']} <-> {rel['table2']}.{rel['column2']}")
+                output.append(f"    数据重叠率 / Overlap Ratio: {rel['overlap_ratio']:.2%}")
+                output.append(f"    置信度 / Confidence: {rel['confidence']}")
+
+        output.append("\n" + "=" * 60)
+        return "\n".join(output)
+
+    def suggest_join_queries(self, table1, table2=None):
+        """生成建议的 JOIN 查询"""
+        analysis = self.analyze_relationships()
+        suggestions = []
+
+        for rel in analysis['implicit_relationships']:
+            if table1 and rel['table1'] != table1 and rel['table2'] != table1:
+                continue
+            if table2 and rel['table1'] != table2 and rel['table2'] != table2:
+                continue
+
+            join_query = f"SELECT * FROM {rel['table1']} JOIN {rel['table2']} ON {rel['table1']}.{rel['column1']} = {rel['table2']}.{rel['column2']}"
+            suggestions.append({
+                'relationship': f"{rel['table1']}.{rel['column1']} <-> {rel['table2']}.{rel['column2']}",
+                'confidence': rel['confidence'],
+                'query': join_query
+            })
+
+        return suggestions
+
     def interactive_mode(self):
         print("=== SQLite 数据库 AI 分析工具 ===")
         print(f"数据库: {self.db_path}")
@@ -135,6 +304,8 @@ class SQLiteAnalyzer:
         print("  tables - 查看所有表")
         print("  schema <表名> - 查看表结构")
         print("  query <SQL语句> - 执行 SQL 查询")
+        print("  relationships - 分析表之间的关联关系")
+        print("  suggest-join <表1> [表2] - 生成 JOIN 查询建议")
         print("  quit - 退出")
 
         while True:
@@ -178,6 +349,34 @@ class SQLiteAnalyzer:
                 print("请稍候...")
                 result = self.analyze_with_ai(question)
                 print(f"\n{result}")
+
+            elif user_input.lower() == 'relationships':
+                print("\n正在分析表关联关系，请稍候...")
+                analysis = self.analyze_relationships()
+                formatted = self.format_relationship_analysis(analysis)
+                print(f"\n{formatted}")
+
+            elif user_input.lower().startswith('suggest-join '):
+                parts = user_input[13:].strip().split()
+                table1 = parts[0] if len(parts) > 0 else None
+                table2 = parts[1] if len(parts) > 1 else None
+
+                if not table1:
+                    print("\n错误: 请指定至少一个表名")
+                    print("用法: suggest-join <表1> [表2]")
+                else:
+                    print(f"\n正在生成 JOIN 查询建议...")
+                    suggestions = self.suggest_join_queries(table1, table2)
+
+                    if suggestions:
+                        print(f"\n找到 {len(suggestions)} 个关联建议:\n")
+                        for i, sug in enumerate(suggestions, 1):
+                            print(f"{i}. 关联 / Relationship: {sug['relationship']}")
+                            print(f"   置信度 / Confidence: {sug['confidence']}")
+                            print(f"   查询 / Query:")
+                            print(f"   {sug['query']}\n")
+                    else:
+                        print("\n未找到相关的表关联")
 
             else:
                 print("未知命令。输入 'help' 查看可用命令")

@@ -1,0 +1,4 @@
+[2026-02-11 10:00:00] INFO: System started
+[2026-02-11 10:05:00] ERROR: Failed to connect to database
+[2026-02-11 10:10:00] WARNING: GPS signal weak, latitude: 39.9042
+[2026-02-11 10:15:00] INFO: User logged in with token: xyz789

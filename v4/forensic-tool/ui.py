@@ -6,14 +6,34 @@ class ForensicToolUI:
     def __init__(self, root):
         self.root = root
         self.root.title("取证比赛高速查询工具")
-        self.root.geometry("1200x800")
+        self.root.geometry("1400x800")
 
-        self.left_frame = ttk.Frame(root, width=300)
+        self.left_frame = ttk.Frame(root, width=450)
         self.left_frame.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
 
         ttk.Label(self.left_frame, text="包名/应用列表").pack(pady=5)
-        self.package_list = ttk.Treeview(self.left_frame, columns=("name",), show="tree")
-        self.package_list.pack(fill=tk.BOTH, expand=True)
+        
+        # 创建带滚动条的 Treeview
+        list_container = ttk.Frame(self.left_frame)
+        list_container.pack(fill=tk.BOTH, expand=True)
+        
+        self.package_list = ttk.Treeview(list_container, columns=("name",), show="headings")
+        self.package_list.column("name", width=420, minwidth=300, stretch=True)
+        self.package_list.heading("name", text="包名")
+        
+        # 双击显示完整包名
+        self.package_list.bind("<Double-1>", self.show_full_package_name)
+        
+        scrollbar = ttk.Scrollbar(list_container, orient="vertical", command=self.package_list.yview)
+        hscrollbar = ttk.Scrollbar(list_container, orient="horizontal", command=self.package_list.xview)
+        self.package_list.configure(yscrollcommand=scrollbar.set, xscrollcommand=hscrollbar.set)
+        
+        self.package_list.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        hscrollbar.grid(row=1, column=0, sticky="ew")
+        
+        list_container.grid_rowconfigure(0, weight=1)
+        list_container.grid_columnconfigure(0, weight=1)
 
         self.right_frame = ttk.Frame(root)
         self.right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -48,6 +68,118 @@ class ForensicToolUI:
         self.result_text.insert(tk.END, "请先选择并扫描目录，然后进行查询\n")
         self.result_text.insert(tk.END, "----------------------------------------\n\n")
 
+    def show_full_package_name(self, event):
+        selection = self.package_list.selection()
+        if selection:
+            item = selection[0]
+            package_name = self.package_list.item(item, "values")[0]
+            
+            try:
+                # 调用 API 查询该包名的文件路径
+                resp = requests.get(f"http://localhost:8000/package_paths?package_name={package_name}", timeout=10)
+                result = resp.json()
+                
+                if result.get("status") == "success" and result.get("paths"):
+                    paths = result["paths"]
+                    
+                    # 如果有多个路径，让用户选择
+                    if len(paths) == 1:
+                        self.open_in_explorer(paths[0], package_name)
+                    else:
+                        # 创建选择对话框
+                        dialog = tk.Toplevel(self.root)
+                        dialog.title(f"选择路径 - {package_name}")
+                        dialog.geometry("600x400")
+                        
+                        ttk.Label(dialog, text=f"包名：{package_name}", font=("Arial", 12, "bold")).pack(pady=10)
+                        ttk.Label(dialog, text="找到多个路径，请选择一个打开：").pack(pady=5)
+                        
+                        # 创建带滚动条的列表
+                        list_container = ttk.Frame(dialog)
+                        list_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+                        
+                        scrollbar = ttk.Scrollbar(list_container)
+                        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+                        
+                        path_list = tk.Listbox(list_container, yscrollcommand=scrollbar.set, font=("Arial", 10))
+                        path_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+                        
+                        scrollbar.config(command=path_list.yview)
+                        
+                        for path in paths:
+                            path_list.insert(tk.END, path)
+                        
+                        # 双击打开路径
+                        def on_double_click(event):
+                            selection = path_list.curselection()
+                            if selection:
+                                selected_path = path_list.get(selection[0])
+                                dialog.destroy()
+                                self.open_in_explorer(selected_path, package_name)
+                        
+                        path_list.bind("<Double-1>", on_double_click)
+                        
+                        # 添加确认按钮
+                        button_frame = ttk.Frame(dialog)
+                        button_frame.pack(pady=10)
+                        
+                        def on_confirm():
+                            selection = path_list.curselection()
+                            if selection:
+                                selected_path = path_list.get(selection[0])
+                                dialog.destroy()
+                                self.open_in_explorer(selected_path, package_name)
+                        
+                        ttk.Button(button_frame, text="打开选中路径", command=on_confirm).pack(side=tk.LEFT, padx=5)
+                        ttk.Button(button_frame, text="取消", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+                else:
+                    messagebox.showwarning("提示", f"未找到包名 '{package_name}' 对应的文件路径")
+                    
+            except Exception as e:
+                messagebox.showerror("错误", f"打开路径失败：{e}")
+    
+    def open_in_explorer(self, path, package_name):
+        import subprocess
+        import os
+        
+        try:
+            # 从文件路径中提取包名所在的目录
+            normalized_path = path.replace("\\", "/")
+            path_parts = [p for p in normalized_path.split("/") if p]
+            
+            # 找到包名在路径中的位置
+            package_index = -1
+            for i, part in enumerate(path_parts):
+                if part == package_name:
+                    package_index = i
+                    break
+            
+            if package_index != -1 and package_index > 0:
+                # 包名所在目录是包名的前一级
+                directory_parts = path_parts[:package_index + 1]
+                directory = "/" + "/".join(directory_parts)
+                
+                # 移除开头的根目录标记（如 /D:/）
+                if directory.startswith("/") and len(directory) > 1 and directory[2] == ":":
+                    directory = directory[1:]
+            else:
+                # 如果找不到包名，使用文件所在目录
+                directory = os.path.dirname(path)
+            
+            # 在 Windows 环境下转换路径格式
+            if os.name == 'nt':
+                directory = directory.replace("/", "\\")
+            
+            print(f"打开目录：{directory}")
+            
+            # 根据操作系统选择打开方式
+            if os.name == 'nt':  # Windows
+                subprocess.Popen(['explorer', directory])
+            elif os.name == 'posix':  # Linux/Mac
+                subprocess.Popen(['xdg-open', directory])
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开文件资源管理器：{e}")
+
     def load_packages(self):
         try:
             resp = requests.get("http://localhost:8000/packages", timeout=5)
@@ -58,9 +190,11 @@ class ForensicToolUI:
                 return
 
             self.package_list.delete(*self.package_list.get_children())
-            for pkg in packages:
-                self.package_list.insert("", tk.END, text=pkg)
-            self.result_text.insert(tk.END, f"✓ 已加载 {len(packages)} 个包名\n\n")
+            # 按字母顺序排序
+            packages_sorted = sorted(packages)
+            for pkg in packages_sorted:
+                self.package_list.insert("", tk.END, values=(pkg,))
+            self.result_text.insert(tk.END, f"✓ 已加载 {len(packages_sorted)} 个包名\n\n")
         except Exception as e:
             self.result_text.insert(tk.END, f"✗ 加载包名失败：{e}\n\n")
 

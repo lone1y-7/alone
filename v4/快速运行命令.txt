@@ -1,0 +1,53 @@
+============================================================
+取证工具 - 快速运行命令
+============================================================
+
+1. 进入项目目录
+   cd forensic-tool
+
+2. 安装依赖
+   pip3 install -r requirements.txt
+   pip3 install fakeredis
+
+3. 编译 C 模块（可选，已预编译）
+   gcc -shared -fPIC -o build/libscanner.so src/file_scanner.c -Wall
+
+4. 启动服务
+   nohup python3 main.py > /tmp/api.log 2>&1 &
+
+5. 查看日志
+   tail -f /tmp/api.log
+
+6. 测试服务
+   curl http://localhost:8000/
+
+7. 扫描测试数据
+   curl -X POST http://localhost:8000/scan \
+     -H "Content-Type: application/json" \
+     -d '{"root_dir": "test_data"}'
+
+8. 获取包名列表
+   curl http://localhost:8000/packages
+
+9. 关键词查询
+   curl -X POST http://localhost:8000/query \
+     -H "Content-Type: application/json" \
+     -d '{"keyword": "password", "source": "sqlite"}'
+
+10. 释放内存
+    curl -X POST http://localhost:8000/release_memory
+
+11. 停止服务
+    pkill -f main.py
+
+12. 查看提交信息
+    git log --oneline -5
+
+13. 推送到远程仓库（需要 GitHub token）
+    git push -u origin 260210-feat-forensic-database-tool-linux
+
+============================================================
+详细文档：forensic-tool/LINUX_RUN_STEPS.md
+提交说明：forensic-tool/提交说明.md
+API 文档：http://localhost:8000/docs
+============================================================

@@ -1,5 +1,0 @@
--- SQLite database for WeChat messages
-CREATE TABLE messages (id INTEGER PRIMARY KEY, content TEXT, timestamp INTEGER);
-INSERT INTO messages VALUES (1, 'password: wx123456', 1640000000);
-INSERT INTO messages VALUES (2, 'latitude: 39.9042, longitude: 116.4074', 1640000001);
-INSERT INTO messages VALUES (3, 'token: abc123def456', 1640000002);

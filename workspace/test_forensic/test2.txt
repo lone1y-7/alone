@@ -1,1 +1,0 @@
-GPS location data: latitude 40.7128

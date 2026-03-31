@@ -1,0 +1,17 @@
+2026-02-12 17:27:57,510 - INFO - 成功加载 Windows DLL: D:\sqlite-tool\v4\v4\forensic-tool\build\scanner.dll
+2026-02-12 17:27:57,579 - INFO - 启动取证工具 API 服务...
+2026-02-12 17:27:58,236 - INFO - 成功加载 Windows DLL: D:\sqlite-tool\v4\v4\forensic-tool\build\scanner.dll
+2026-02-12 17:27:58,325 - INFO - 成功加载 Windows DLL: D:\sqlite-tool\v4\v4\forensic-tool\build\scanner.dll
+2026-02-12 17:28:32,690 - INFO - 内存已释放 - Redis 缓存清空，SQLite 优化完成
+2026-02-12 17:28:41,163 - INFO - 开始递归扫描目录: H:\2025美亚杯导出\FUNG_CC_mobile\var\mobile\Applications
+2026-02-12 17:28:41,164 - INFO - 递归扫描完成，共找到 0 个文件
+2026-02-12 17:28:41,165 - INFO - 保存扫描结果完成 - 总文件: 0, 新增/更新: 0, 耗时: 0.00s, 识别包名: 0 个
+2026-02-12 17:35:46,098 - INFO - 成功加载 Windows DLL: D:\sqlite-tool\v4\v4\forensic-tool\build\scanner.dll
+2026-02-12 17:35:46,155 - INFO - 启动取证工具 API 服务...
+2026-02-12 17:35:46,872 - INFO - 成功加载 Windows DLL: D:\sqlite-tool\v4\v4\forensic-tool\build\scanner.dll
+2026-02-12 17:35:46,948 - INFO - 成功加载 Windows DLL: D:\sqlite-tool\v4\v4\forensic-tool\build\scanner.dll
+2026-02-12 17:35:59,820 - INFO - 开始递归扫描目录: H:\2025美亚杯导出\FUNG_CC_mobile\var\mobile\Applications
+2026-02-12 17:35:59,820 - INFO - 递归扫描完成，共找到 0 个文件
+2026-02-12 17:35:59,822 - INFO - 保存扫描结果完成 - 总文件: 0, 新增/更新: 0, 耗时: 0.00s, 识别包名: 0 个
+2026-02-12 17:36:24,500 - INFO - 开始递归扫描目录: D:\sqlite-tool\ceshi
+2026-02-12 17:36:24,537 - ERROR - 扫描失败: C 模块扫描目录失败
